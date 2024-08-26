@@ -1,5 +1,5 @@
 # bump: vim-version /VIM_VERSION="(.*)"/ https://github.com/vim/vim.git|semver:*|re:/([\d]+).([\d]+).([\d][\d]*00+)/$1.$2.$3/
-VIM_VERSION="9.1.0697"
+VIM_VERSION="9.1.0600"
 
 export ZOPEN_BUILD_LINE="STABLE"
 export ZOPEN_STABLE_URL="https://github.com/vim/vim.git"
