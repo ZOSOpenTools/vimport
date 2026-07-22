@@ -1,0 +1,15 @@
+diff --git a/src/screen.c b/src/screen.c
+index 7d75af022..a67582b58 100644
+--- a/src/screen.c
++++ b/src/screen.c
+@@ -5330,6 +5330,10 @@ get_trans_bufname(buf_T *buf)
+ {
+     if (buf_spname(buf) != NULL)
+ 	vim_strncpy(NameBuff, buf_spname(buf), MAXPATHL - 1);
++#ifdef __MVS__
++    else if (buf->is_dataset && buf->dsname != NULL)
++	vim_strncpy(NameBuff, (char_u *)buf->dsname, MAXPATHL - 1);
++#endif
+     else
+ 	home_replace(buf, buf->b_fname, NameBuff, MAXPATHL, TRUE);
+     trans_characters(NameBuff, MAXPATHL);

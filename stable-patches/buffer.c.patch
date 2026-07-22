@@ -1,5 +1,5 @@
 diff --git a/src/buffer.c b/src/buffer.c
-index 48a6bdc3d..550912f25 100644
+index 48a6bdc3d..5cb13357c 100644
 --- a/src/buffer.c
 +++ b/src/buffer.c
 @@ -26,6 +26,9 @@
@@ -12,7 +12,19 @@ index 48a6bdc3d..550912f25 100644
  
  
  #ifdef FEAT_EVAL
-@@ -2168,6 +2171,11 @@ buflist_new(
+@@ -1125,6 +1128,11 @@ free_buffer_stuff(
+     map_clear_mode(buf, MAP_ALL_MODES, TRUE, FALSE);  // clear local mappings
+     map_clear_mode(buf, MAP_ALL_MODES, TRUE, TRUE);   // clear local abbrevs
+     VIM_CLEAR(buf->b_start_fenc);
++#ifdef __MVS__
++    VIM_CLEAR(buf->dsname);
++    buf->is_dataset = FALSE;
++    buf->reclen = -1;
++#endif
+ }
+ 
+ /*
+@@ -2168,6 +2176,11 @@ buflist_new(
  {
      char_u	*ffname = ffname_arg;
      char_u	*sfname = sfname_arg;
@@ -24,78 +36,91 @@ index 48a6bdc3d..550912f25 100644
      buf_T	*buf;
  #ifdef UNIX
      stat_T	st;
-@@ -2176,6 +2184,70 @@ buflist_new(
+@@ -2176,6 +2189,73 @@ buflist_new(
      if (top_file_num == 1)
  	hash_init(&buf_hashtab);
  
 +  // Dataset I/O
 +#ifdef __MVS__
-+    if (ffname != NULL)
++    if (ffname != NULL && is_dataset(ffname))
 +    {
-+      if (is_dataset(ffname)) {
-+        struct DFILE* dsfile = open_dataset(ffname, NULL);
-+        if (!dsfile) {
-+	        semsg(_("Could not open dataset for %s"), ffname);
-+          return NULL;
-+        }
++      struct DFILE* dsfile = open_dataset(ffname, NULL);
++      if (!dsfile)
++      {
++	semsg(_("Could not open dataset for %s"), ffname);
++	return NULL;
++      }
 +
-+        if (dsfile->err) {
-+	        emsg(_(dsfile->msgbuff));
-+          close_dataset(dsfile);
-+          return NULL;
-+        }
++      if (dsfile->err)
++      {
++	emsg(_(dsfile->msgbuff));
++	close_dataset(dsfile);
++	return NULL;
++      }
 +
-+        if ((dsfile->dsorg == D_PDSE || dsfile->dsorg == D_PDS) && !has_member(dsfile)) {
-+          emsg(_("Only PDSE/PDS with members are currently supported."));
-+          close_dataset(dsfile);
-+          return NULL;
-+        }
++      if ((dsfile->dsorg == D_PDSE || dsfile->dsorg == D_PDS) && !has_member(dsfile))
++      {
++	emsg(_("Only PDSE/PDS with members are currently supported."));
++	close_dataset(dsfile);
++	return NULL;
++      }
 +
-+        if (read_dataset(dsfile) > 0) {
-+	        emsg(_(dsfile->msgbuff));
-+          close_dataset(dsfile);
-+          return NULL;
-+        }
++      if (read_dataset(dsfile) > 0)
++      {
++	emsg(_(dsfile->msgbuff));
++	close_dataset(dsfile);
++	return NULL;
++      }
 +
-+        // Store the original dataset name
-+        dsname = vim_strsave(ffname);
-+        reclen = dsfile->reclen;
-+        isdataset = TRUE; 
++      // Map dataset to a deterministic file path to enable swap file protection
++      char file_suffix[PATH_MAX];
++      char newpath[PATH_MAX];
++      char *user = getenv("USER");
++      if (user == NULL)
++	user = "default";
 +
-+        // Map dataset to a deterministic file path to enable swap file protection
-+        char file_suffix[PATH_MAX];
-+        char newpath[PATH_MAX];
-+        char *user = getenv("USER");
-+        if (user == NULL) user = "default";
++      map_to_unixfile(dsfile, file_suffix);
++      snprintf(newpath, PATH_MAX, "/tmp/%s-%s", user, file_suffix);
 +
-+        map_to_unixfile(dsfile, file_suffix);
-+        snprintf(newpath, PATH_MAX, "/tmp/%s-%s", user, file_suffix);
++      int is_bin = (dsfile->txtflag == 0 || dsfile->is_binary);
 +
-+        // Set ffname and sfname to the deterministic path
-+        sfname = vim_strsave(newpath);
-+        ffname = sfname;
++      if (write_dataset_to_temp_file(dsfile, newpath, is_bin) != 0)
++      {
++	emsg(_("Error writing dataset contents to temporary file"));
++	close_dataset(dsfile);
++	return NULL;
++      }
 +
-+        if (dsfile->txtflag == 0 || dsfile->is_binary) 
-+          curbuf->b_p_bin = TRUE;
-+    
-+        if (write_dataset_to_temp_file(dsfile, ffname, curbuf->b_p_bin) != 0) {
-+          emsg(_("Error writing dataset contents to temporary file"));
-+          close_dataset(dsfile);
-+          return NULL;
-+        }
++      if (close_dataset(dsfile) > 0)
++      {
++	emsg(_(dsfile->msgbuff));
++	return NULL;
++      }
 +
-+        //free(dsfile->buffer);
-+        if (close_dataset(dsfile) > 0) {
-+	        emsg(_(dsfile->msgbuff));
-+          return NULL;
-+        }
-+      } 
++      // All dataset operations succeeded. Now allocate memory and set flags.
++      dsname = vim_strsave(ffname);
++      sfname = vim_strsave(newpath);
++      ffname = sfname;
++      reclen = dsfile->reclen;
++      isdataset = TRUE;
++      if (is_bin)
++	curbuf->b_p_bin = TRUE;
 +    } 
 +#endif
      fname_expand(curbuf, &ffname, &sfname);	// will allocate ffname
  
      /*
-@@ -2274,9 +2346,10 @@ buflist_new(
+@@ -2195,6 +2275,9 @@ buflist_new(
+ #endif
+ 		) != NULL)
+     {
++#ifdef __MVS__
++	vim_free(dsname);
++#endif
+ 	vim_free(ffname);
+ 	if (lnum != 0)
+ 	    buflist_setfpos(buf, (flags & BLN_NOCURWIN) ? NULL : curwin,
+@@ -2274,9 +2357,10 @@ buflist_new(
  
      if (ffname != NULL)
      {
@@ -108,7 +133,7 @@ index 48a6bdc3d..550912f25 100644
  
      clear_wininfo(buf);
      buf->b_wininfo = ALLOC_CLEAR_ONE(wininfo_T);
-@@ -2323,6 +2396,7 @@ buflist_new(
+@@ -2323,6 +2407,7 @@ buflist_new(
  	}
  	lastbuf = buf;
  
@@ -116,7 +141,7 @@ index 48a6bdc3d..550912f25 100644
  	if ((flags & BLN_REUSE) && buf_reuse.ga_len > 0)
  	{
  	    // Recycle a previously used buffer number.  Used for buffers which
-@@ -2377,6 +2451,13 @@ buflist_new(
+@@ -2377,6 +2462,13 @@ buflist_new(
  #endif
  
      buf->b_fname = buf->b_sfname;
@@ -130,3 +155,65 @@ index 48a6bdc3d..550912f25 100644
  #ifdef UNIX
      if (st.st_dev == (dev_T)-1)
  	buf->b_dev_valid = false;
+@@ -3498,6 +3590,10 @@ buflist_list(exarg_T *eap)
+ 	name = buf_spname(buf);
+ 	if (name != NULL)
+ 	    vim_strncpy(NameBuff, name, MAXPATHL - 1);
++#ifdef __MVS__
++	else if (buf->is_dataset && buf->dsname != NULL)
++	    vim_strncpy(NameBuff, (char_u *)buf->dsname, MAXPATHL - 1);
++#endif
+ 	else
+ 	    home_replace(buf, buf->b_fname, NameBuff, MAXPATHL, TRUE);
+ 	if (message_filtered(NameBuff))
+@@ -3947,6 +4043,11 @@ fileinfo(
+     if (name != NULL)
+ 	bufferlen += vim_snprintf_safelen(buffer + bufferlen,
+ 	    IOSIZE - bufferlen, "%s", name);
++#ifdef __MVS__
++    else if (curbuf->is_dataset && curbuf->dsname != NULL)
++	bufferlen += vim_snprintf_safelen(buffer + bufferlen,
++	    IOSIZE - bufferlen, "%s", curbuf->dsname);
++#endif
+     else
+     {
+ 	if (!fullname && curbuf->b_fname != NULL)
+@@ -4183,6 +4284,12 @@ maketitle(void)
+ 		buflen += vim_snprintf_safelen((char *)buf + buflen,
+ 		    sizeof(buf) - buflen, " (");
+ 
++#ifdef __MVS__
++		if (curbuf->is_dataset && curbuf->dsname != NULL)
++		    vim_strncpy((char_u *)buf + buflen, (char_u *)curbuf->dsname,
++			(int)(SPACE_FOR_DIR - buflen) - 1);
++		else
++#endif
+ 		home_replace(curbuf, curbuf->b_ffname,
+ 		    buf + buflen, (int)(SPACE_FOR_DIR - buflen), TRUE);
+ 
+@@ -4269,7 +4376,14 @@ maketitle(void)
+ 
+ 	    name = buf_spname(curbuf);
+ 	    if (name == NULL)
++	    {
++#ifdef __MVS__
++		if (curbuf->is_dataset && curbuf->dsname != NULL)
++		    name = (char_u *)curbuf->dsname;
++		else
++#endif
+ 		name = gettail(curbuf->b_ffname);
++	    }
+ 	    // Truncate name at 100 bytes.
+ 	    namelen = (int)STRLEN(name);
+ 	    if (namelen > 100)
+@@ -5027,6 +5141,10 @@ build_stl_str_hl_local(
+ 	    name = buf_spname(wp->w_buffer);
+ 	    if (name != NULL)
+ 		vim_strncpy(NameBuff, name, MAXPATHL - 1);
++#ifdef __MVS__
++	    else if (wp->w_buffer->is_dataset && wp->w_buffer->dsname != NULL)
++		vim_strncpy(NameBuff, (char_u *)wp->w_buffer->dsname, MAXPATHL - 1);
++#endif
+ 	    else
+ 	    {
+ 		char_u	*t = (opt == STL_FULLPATH) ? wp->w_buffer->b_ffname
