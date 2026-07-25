@@ -1,5 +1,5 @@
 # bump: vim-version /VIM_VERSION="(.*)"/ fetch:https://api.github.com/repos/vim/vim/tags?per_page=50|/"name":"v(\d+\.\d+\.\d+[05]0)"/
-VIM_VERSION="9.2.0800"
+VIM_VERSION="9.2.0850"
 
 export ZOPEN_BUILD_LINE="STABLE"
 export ZOPEN_CATEGORIES="editor development"
