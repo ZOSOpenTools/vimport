@@ -1,0 +1,14 @@
+diff --git a/src/option.h b/src/option.h
+index c3df71f..120c644 100644
+--- a/src/option.h
++++ b/src/option.h
+@@ -988,6 +988,9 @@ EXTERN char_u	*p_spf;		// 'spellfile'
+ EXTERN char_u	*p_spl;		// 'spelllang'
+ EXTERN char_u	*p_spo;		// 'spelloptions'
+ EXTERN char_u	*p_sps;		// 'spellsuggest'
++#ifdef __MVS__
++EXTERN int	p_ifl;		// 'ispflock'
++#endif
+ #endif
+ EXTERN int	p_spr;		// 'splitright'
+ EXTERN int	p_sol;		// 'startofline'
