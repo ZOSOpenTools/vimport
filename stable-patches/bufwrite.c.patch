@@ -1,5 +1,5 @@
 diff --git a/src/bufwrite.c b/src/bufwrite.c
-index 488ed94d9..8e888dd11 100644
+index 488ed94..90eaf6d 100644
 --- a/src/bufwrite.c
 +++ b/src/bufwrite.c
 @@ -12,6 +12,10 @@
@@ -43,7 +43,7 @@ index 488ed94d9..8e888dd11 100644
  	    write_info.bw_fd = fd;
  
  #if defined(UNIX)
-@@ -2535,6 +2553,44 @@ restore_backup:
+@@ -2535,6 +2553,49 @@ restore_backup:
  	    && mch_remove(backup) != 0)
  	emsg(_(e_cant_delete_backup_file));
  
@@ -59,27 +59,32 @@ index 488ed94d9..8e888dd11 100644
 +      buffer = NULL;
 +      goto fail;
 +    }
++    dsfile->bypass_locks = !p_ifl;
 +
 +    if (dsfile->err) {
-+      errmsg = dsfile->msgbuff;
++      errmsg = vim_strsave(dio_errmsg(dsfile));
++      errmsg_allocated = TRUE;
 +      close_dataset(dsfile);
 +      goto fail;
 +    }
 +
 +    if (read_temp_file_to_buffer(fname, dsfile) == NULL) {
-+      errmsg = dsfile->msgbuff;
++      errmsg = vim_strsave(dio_errmsg(dsfile));
++      errmsg_allocated = TRUE;
 +      close_dataset(dsfile);
 +      goto fail;
 +    } 
 +
 +    if (write_dataset(dsfile)) {
-+      errmsg = dsfile->msgbuff;
++      errmsg = vim_strsave(dio_errmsg(dsfile));
++      errmsg_allocated = TRUE;
 +      close_dataset(dsfile);
 +      goto fail;
 +    }
 +
 +    if (close_dataset(dsfile)) {
-+      errmsg = dsfile->msgbuff;
++      errmsg = vim_strsave(dio_errmsg(dsfile));
++      errmsg_allocated = TRUE;
 +      goto fail;
 +    }
 +  }
