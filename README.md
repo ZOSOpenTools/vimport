@@ -1,3 +1,5 @@
+[![CodeQL](https://github.com/Sanjana-Kondalwade/vimport/actions/workflows/codeql.yml/badge.svg)](https://github.com/Sanjana-Kondalwade/vimport/actions/workflows/codeql.yml)
+
 [![Automatic version updates](https://github.com/ZOSOpenTools/vimport/actions/workflows/bump.yml/badge.svg)](https://github.com/ZOSOpenTools/vimport/actions/workflows/bump.yml)
 
 # Vim
